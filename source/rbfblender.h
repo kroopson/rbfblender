@@ -1,7 +1,13 @@
-#ifndef RBFBLENDER
-#define RBFBLENDER
 
 #include <Eigen/Core>
+#include <Eigen/LU>
+
+#define EIGEN_DONT_ALIGN_STATICALLY
+#define EIGEN_DONT_VECTORIZE
+#define EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT
+
+#ifndef RBRFBLENDER_H
+#define RBRFBLENDER_H
 
 #include <maya/MString.h>
 #include <maya/MGlobal.h>
@@ -18,13 +24,23 @@
 #include <maya/MFnNumericAttribute.h>
 #include <maya/MFnMatrixAttribute.h>
 #include <maya/MFnEnumAttribute.h>
+#include <maya/MFnCompoundAttribute.h>
+#include <maya/MFnTypedAttribute.h>
 
 #include <maya/MVector.h>
 #include <maya/MMatrix.h>
 
 #include <maya/MQuaternion.h>
 #include <maya/MAngle.h>
-#include <maya/MFnPlugin.h>
+
+/* MACRO THAT DISPLAYS A MESSAGE IN CONSOLE ONLY IF THE PLUGIN HAS BEEN COMPILED IN Debug CONFIGURATION */
+#ifdef _DEBUG	
+#define LOG_DEBUG_MESSAGE(message)				\
+MGlobal::displayInfo(MString("Debug: ") + message);
+#endif
+#ifndef _DEBUG
+#define LOG_DEBUG_MESSAGE(message)
+#endif
 
 
 class RbfBlender : public MPxNode{
@@ -42,6 +58,17 @@ public:
 	static MObject input;
 	static MObject output;
 	static MObject poses;
+	static MObject poseName;
+	static MObject poseInputs;
+	static MObject poseValues;
+
+	static MObject valueGuard;
+private:
+	Eigen::MatrixXd distancesMatrix;
+	Eigen::MatrixXd valuesMatrix;
+	Eigen::MatrixXd phiWeightsMatrix;
+
+	MStatus recalculateDistancesMatrix(MDataBlock &data);
 };
 
 #endif
