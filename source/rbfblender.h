@@ -35,7 +35,7 @@
 #include <maya/MAngle.h>
 
 /* MACRO THAT DISPLAYS A MESSAGE IN CONSOLE ONLY IF THE PLUGIN HAS BEEN COMPILED IN Debug CONFIGURATION */
-#ifdef _DEBUG	
+#ifdef _DEBUG
 #define LOG_DEBUG_MESSAGE(message)				\
 MGlobal::displayInfo(MString("Debug: ") + message);
 #endif
@@ -65,6 +65,8 @@ public:
 
 	static MObject valueGuard;
 private:
+	MIntArray lastCalculatedIndices;
+
 	Eigen::MatrixXd distancesMatrix;
 	Eigen::MatrixXd valuesMatrix;
 	Eigen::MatrixXd phiWeightsMatrix;
