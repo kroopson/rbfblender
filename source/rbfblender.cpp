@@ -101,7 +101,6 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	for (unsigned int poseIndex = 0; poseIndex < numPoses; poseIndex++){
 		for (unsigned int i = 0; i < numOutputs; i++){
 			unsigned int indice = outputIndices[i];
-			std::cout << posesPlug.elementByPhysicalIndex(poseIndex).child(2).elementByLogicalIndex(outputIndices[i]).name() << std::endl;
 			valuesMatrix( poseIndex, i) = posesPlug.elementByPhysicalIndex(poseIndex).child(2).elementByLogicalIndex(outputIndices[i]).asDouble();
 		}
 	}
