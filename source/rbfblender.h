@@ -17,6 +17,7 @@
 #include <maya/MPlug.h>
 #include <maya/MDataBlock.h>
 #include <maya/MDataHandle.h>
+#include <maya/MFnDependencyNode.h>
 
 #include <maya/MPlug.h>
 #include <maya/MDataBlock.h>

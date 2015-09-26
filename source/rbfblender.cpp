@@ -35,6 +35,7 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	MPlug posesPlug(thisMObject(), poses);
 	unsigned int numPoses = posesPlug.numElements();  // number of poses currently available
 	if (numPoses == 0){  // quit if no poses created
+		LOG_DEBUG_MESSAGE(MString("No poses found yet. Quitting"));
 		return MStatus::kFailure;
 	}
 
@@ -46,11 +47,13 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	
 	inputPlug.getExistingArrayAttributeIndices(inputIndices);
 	if (inputIndices.length() == 0){
+		LOG_DEBUG_MESSAGE(MString("No inputs found yet. Quitting"));
 		return MStatus::kFailure;
 	}
 
-	inputPlug.getExistingArrayAttributeIndices(outputIndices);
+	outputPlug.getExistingArrayAttributeIndices(outputIndices);
 	if (outputIndices.length() == 0){
+		LOG_DEBUG_MESSAGE(MString("No outputs found yet. Quitting"));
 		return MStatus::kFailure;
 	}
 
@@ -60,9 +63,9 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	distancesMatrix.fill(0.0);
 	distancesMatrix.resize(numPoses, numPoses);
 	valuesMatrix.fill(0.0);
-	valuesMatrix.resize(numPoses, numOutputs);
+	valuesMatrix.resize( numPoses, numOutputs);
 	phiWeightsMatrix.fill(0.0);
-	phiWeightsMatrix.resize(numOutputs, numPoses);
+	phiWeightsMatrix.resize( numPoses, numOutputs);
 
 	//Eigen::VectorXd currentInputVector(inputIndices.length());
 	Eigen::MatrixXd  poseInputsMatrix(numPoses, numInputs);
@@ -85,56 +88,73 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	for (unsigned int poseIndex = 0; poseIndex < numPoses; poseIndex++){
 		for (unsigned int i = 0; i < numOutputs; i++){
 			unsigned int indice = outputIndices[i];
-			valuesMatrix(poseIndex, i) = posesPlug.elementByPhysicalIndex(poseIndex).child(2).elementByLogicalIndex(outputIndices[i]).asDouble();
+			std::cout << posesPlug.elementByPhysicalIndex(poseIndex).child(2).elementByLogicalIndex(outputIndices[i]).name() << std::endl;
+			valuesMatrix( poseIndex, i) = posesPlug.elementByPhysicalIndex(poseIndex).child(2).elementByLogicalIndex(outputIndices[i]).asDouble();
 		}
 	}
-	
+	std::cout << "Values matrix " << std::endl << valuesMatrix << std::endl;
+	bool zero_distance = false;
 	// fill the distances matrix with distance from each pose input vector to all the other vectors.
 	for (unsigned int poseIndex = 0; poseIndex < numPoses; poseIndex++){
 		for (unsigned int i = 0; i < numPoses; i++){
+
+			//// Check duplicated pose
+			//if ((poseInputsMatrix.row(poseIndex) - poseInputsMatrix.row(i)).norm() == 0.0){
+			//	if (zero_distance == true){
+			//		MFnDependencyNode thisDepNode(thisMObject());
+			//		MGlobal::displayError(MString("RbfBlender node ") + thisDepNode.name() + " has duplicated pose");
+			//		return MStatus::kFailure;
+			//	}
+			//	zero_distance = true;
+			//}
+
 			double distance = phiLinear((poseInputsMatrix.row(poseIndex) - poseInputsMatrix.row(i)).norm());
-			distancesMatrix(poseIndex, i) = distance;
-			LOG_DEBUG_MESSAGE(MString("Distance is: ") + distance);
+			distancesMatrix(i, poseIndex) = distance;
+			// LOG_DEBUG_MESSAGE(MString("Distance is: ") + distance);
 		}
 	}
-
+	
 	// for each output multiply the column of values matrix by the inversed distances matrix.
 	// This gives you weights for RBF function distances for this particular output.
 	// Number of rows on weights vector equals the number of poses and number of columns equals the number of outputs
 	for (unsigned int outputIndex = 0; outputIndex < numOutputs; outputIndex++){
-		Eigen::MatrixXd weightsVector = distancesMatrix.inverse() * valuesMatrix.col(outputIndex);
+		
+		Eigen::MatrixXd weightsVector(0, 0);
+		
+		if (distancesMatrix.determinant() != 0){
+			// weightsVector.resize(valuesMatrix.col(outputIndex).rows(), 1);
+			weightsVector = distancesMatrix.inverse() * valuesMatrix.col(outputIndex);
+		} else {
+			weightsVector.resize(valuesMatrix.col(outputIndex).rows(), 1);
+			weightsVector.fill(0.0f);
+		}
+		std::cout << "HERE" << std::endl;
 		for (unsigned int rowIndex = 0; rowIndex < weightsVector.rows(); rowIndex++){
-			phiWeightsMatrix(outputIndex, rowIndex ) = weightsVector(rowIndex, 0);
+			// std::cout << "Output index " << outputIndex << " " << rowIndex << std::endl;
+			// std::cout << "phiWeightsMatrix " << phiWeightsMatrix.cols() << " " << phiWeightsMatrix.rows() << std::endl;
+			phiWeightsMatrix(  rowIndex, outputIndex ) = weightsVector(rowIndex, 0);
 		}
 	}
-
+	std::cout << "Weights matrix " << phiWeightsMatrix << std::endl;
 	return MStatus::kSuccess;
 }
 
 MStatus RbfBlender::compute(const MPlug& plug, MDataBlock& data){
 	MStatus stat;
 	if (plug.isElement()){
-
-		// DEBUG
 		if (plug.array() == output){
-			LOG_DEBUG_MESSAGE(MString("Computing output plug!"));
+			// DEBUG
+			LOG_DEBUG_MESSAGE(MString("Computing output plug!") + plug.name());
 		
 			// Check if any poses available. If not just return 0.0
 			MPlug poses(thisMObject(), poses);
 			MDataHandle outputHandle = data.outputValue(plug);
 			if (poses.numElements() == 0){
 				// DEBUG
-				LOG_DEBUG_MESSAGE(MString("Missing any poses!"));
+				// LOG_DEBUG_MESSAGE(MString("Missing any poses!"));
 				outputHandle.setDouble(0.0);
 				data.setClean(plug);
 				return stat;
-			}
-			// Check if internal data needs to be recalculated
-			if (!data.isClean(valueGuard)){
-				// DEBUG
-				LOG_DEBUG_MESSAGE(MString("Recalculating distances matrix"));
-				recalculateDistancesMatrix(data);
-				data.setClean(valueGuard);
 			}
 
 			// get the logical index of this plug
@@ -153,8 +173,32 @@ MStatus RbfBlender::compute(const MPlug& plug, MDataBlock& data){
 			for (unsigned int outputIndex = 0; outputIndex < outputIndices.length(); outputIndex++){
 				if (outputIndices[outputIndex] == plug.logicalIndex()){
 					outputPhysicalIndex = outputIndex;
-					LOG_DEBUG_MESSAGE(MString("Found physical index:") + outputPhysicalIndex);
+					// DEBUG
+					// LOG_DEBUG_MESSAGE(MString("Found physical index:") + outputPhysicalIndex);
 				}
+			}
+
+			if (poses.numElements() == 1){
+				MIntArray indexes;
+				poses.getExistingArrayAttributeIndices(indexes);
+				// DEBUG
+				// LOG_DEBUG_MESSAGE(MString("Only one pose!"));
+				double value = poses.elementByLogicalIndex(indexes[0]).child(2).elementByLogicalIndex(currentPlugIndex).asDouble();
+				outputHandle.setDouble(value);
+				data.setClean(plug);
+				return stat;
+			}
+			
+			// Check if internal data needs to be recalculated
+			// !data.isClean(valueGuard)
+			if (true){
+				// DEBUG
+				LOG_DEBUG_MESSAGE(MString("Recalculating distances matrix"));
+				MStatus result = recalculateDistancesMatrix(data);
+				if (result == MStatus::kFailure){
+					return MStatus::kFailure;
+				}
+				data.setClean(valueGuard);
 			}
 			
 			Eigen::MatrixXd currentInputsVector(inputPlug.numElements(), 1);
@@ -172,10 +216,14 @@ MStatus RbfBlender::compute(const MPlug& plug, MDataBlock& data){
 					poseInputsVector(i, 0) = posesPlug.elementByPhysicalIndex(poseIndex).child(1).elementByLogicalIndex(inputIndices[i]).asDouble();
 				}
 				double distance = phiLinear((currentInputsVector - poseInputsVector).norm());
-				double weight = phiWeightsMatrix(outputPhysicalIndex, poseIndex);
+				std::cout << "HERE" << phiWeightsMatrix << std::endl << "poseIndex" << poseIndex << "outputIndex" << outputPhysicalIndex<< std::endl;
+				double weight = phiWeightsMatrix( poseIndex, outputPhysicalIndex);
 				result += distance * weight;
-				LOG_DEBUG_MESSAGE(MString("Distance from current is:") + distance);
+				// DEBUG
+				// LOG_DEBUG_MESSAGE(MString("Distance from current is:") + distance);
+				// LOG_DEBUG_MESSAGE(MString("Weight for current is:") + weight);
 			}
+			// DEBUG
 			LOG_DEBUG_MESSAGE(MString("Result for this plug is:") + result);
 			outputHandle.setDouble(result);
 		}
