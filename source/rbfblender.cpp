@@ -10,6 +10,9 @@ MObject RbfBlender::poseValues;
 
 MObject RbfBlender::valueGuard;
 
+MObject RbfBlender::rbfKernel;
+MObject RbfBlender::blurParameter;
+
 MTypeId RbfBlender::kNodeId(0x0011827B);
 
 RbfBlender::RbfBlender(){
@@ -22,14 +25,62 @@ void* RbfBlender::creator(){
 	return new RbfBlender();
 }
 
-double phiLinear(double r){
+
+/* For further explaination of those functions visit https://en.wikipedia.org/wiki/Radial_basis_function */
+double RbfBlender::phiLinear(double r){
 	return r;
 }
-//double PhiMultiquadratic(double radius){
-//
-//}
 
-bool compareMIntArrays(MIntArray &first, MIntArray &second){
+double RbfBlender::phiMultiquadratic(double r, double blur){
+	return sqrt(pow(r, 2) + pow(blur,2));
+}
+
+double RbfBlender::phiGaussian(double r, double blur){
+	return exp(-(blur * pow(r,2)));
+}
+
+double RbfBlender::phiQubic(double r){
+	return pow(r, 3);
+}
+
+double RbfBlender::phiThinPlate(double r){
+	if (r == 0.0){
+		return 0.0;
+	}
+	return pow(r, 2) * log(r);
+}
+
+/* This function selects the Radial basis function kernel and returns the value of it */
+double RbfBlender::getPhi(double r){
+	MPlug rbfkernelPlug(thisMObject(), rbfKernel);
+	int value = rbfkernelPlug.asInt();
+	double result = 0.0f;
+	MPlug blurPlug(thisMObject(), blurParameter);
+	switch(value){
+		case 0:
+			result = phiLinear(r);
+			break;
+		case 1:
+			result =  phiMultiquadratic(r, blurPlug.asDouble());
+			break;
+		case 2:
+			result =  phiGaussian(r, blurPlug.asDouble());
+			break;
+		case 3:
+			result =  phiQubic(r);
+			break;
+		case 4:
+			// DEBUG
+			result =  phiThinPlate(r);
+			break;
+		default:
+			result =  0;
+			break;
+	}
+	return result;
+}
+
+bool RbfBlender::compareMIntArrays(MIntArray &first, MIntArray &second){
 	if (first.length() != second.length()){
 		return false;
 	}
@@ -110,7 +161,7 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	for (unsigned int poseIndex = 0; poseIndex < numPoses; poseIndex++){
 		for (unsigned int i = 0; i < numPoses; i++){
 
-			double distance = phiLinear((poseInputsMatrix.row(poseIndex) - poseInputsMatrix.row(i)).norm());
+			double distance = getPhi((poseInputsMatrix.row(poseIndex) - poseInputsMatrix.row(i)).norm());
 			distancesMatrix(i, poseIndex) = distance;
 			// LOG_DEBUG_MESSAGE(MString("Distance is: ") + distance);
 		}
@@ -216,7 +267,7 @@ MStatus RbfBlender::compute(const MPlug& plug, MDataBlock& data){
 				for (unsigned int i=0; i < inputIndices.length(); i++){
 					poseInputsVector(i, 0) = posesPlug.elementByPhysicalIndex(poseIndex).child(1).elementByLogicalIndex(inputIndices[i]).asDouble();
 				}
-				double distance = phiLinear((currentInputsVector - poseInputsVector).norm());
+				double distance = getPhi((currentInputsVector - poseInputsVector).norm());
 				double weight = phiWeightsMatrix( poseIndex, outputPhysicalIndex);
 				result += distance * weight;
 				// DEBUG
@@ -239,6 +290,8 @@ bool RbfBlender::isPassiveOutput(const MPlug &plug) const{
 	LOG_DEBUG_MESSAGE(MString("Checking if output is passive for ") + plug.name());
 	if (plug.isElement()){
 		if (plug.array() == output){
+			// DEBUG
+			LOG_DEBUG_MESSAGE(MString("Is a passive output ") + plug.name());
 			return true;
 		}
 	}
@@ -250,6 +303,7 @@ MStatus RbfBlender::initialize(){
 	MFnNumericAttribute nAttr;
 	MFnCompoundAttribute cAttr;
 	MFnTypedAttribute tAttr;
+	MFnEnumAttribute eAttr;
 	MStatus status;
 
 	input = nAttr.create("input", "i", MFnNumericData::kDouble, 0.0, &status);
@@ -294,10 +348,30 @@ MStatus RbfBlender::initialize(){
 	nAttr.setHidden(true);
 	nAttr.setWritable(false);
 
+	rbfKernel = eAttr.create("rbfKernel", "rbk", 0, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	eAttr.addField("Linear", 0);
+	eAttr.addField("Multiquadratic", 1);
+	eAttr.addField("Gaussian", 2);
+	eAttr.addField("Qubic", 3);
+	eAttr.addField("Thin plate", 4);
+	eAttr.setKeyable(false);
+	eAttr.setChannelBox(true);
+
+	blurParameter = nAttr.create("blurParameter", "bp", MFnNumericData::kDouble, 0.0, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	nAttr.setKeyable(false);
+	nAttr.setChannelBox(true);
+	nAttr.setMin(0.0001);
+	nAttr.setDefault(1.0);
+	
+
 	addAttribute(input);
 	addAttribute(poses);
 	addAttribute(output);
 	addAttribute(valueGuard);
+	addAttribute(rbfKernel);
+	addAttribute(blurParameter);
 
 	attributeAffects(input, output);
 
@@ -305,6 +379,8 @@ MStatus RbfBlender::initialize(){
 	attributeAffects(poseValues, valueGuard);
 	attributeAffects(poseInputs, valueGuard);
 	attributeAffects(poseInputs, output);
+	attributeAffects(rbfKernel, output);
+	attributeAffects(rbfKernel, valueGuard);
 
 	return status;
 }

@@ -36,7 +36,7 @@
 
 /* MACRO THAT DISPLAYS A MESSAGE IN CONSOLE ONLY IF THE PLUGIN HAS BEEN COMPILED IN Debug CONFIGURATION */
 #ifdef _DEBUG
-#define LOG_DEBUG_MESSAGE(message)				\
+#define LOG_DEBUG_MESSAGE(message)				  \
 MGlobal::displayInfo(MString("Debug: ") + message);
 #endif
 #ifndef _DEBUG
@@ -58,11 +58,18 @@ public:
 	// Attributes
 	static MObject input;
 	static MObject output;
+
 	static MObject poses;
 	static MObject poseName;
 	static MObject poseInputs;
 	static MObject poseValues;
 
+	static MObject rbfKernel;
+	static MObject blurParameter;  // Used for some kernels.
+
+	// This attribute value is never used, however when it has dirty bit set to 1
+	// the internal data - distancesMatrix, valuesMatrix and phiWeightsMatrix is recalculated.
+	// It's a performance optimisation.
 	static MObject valueGuard;
 
 	virtual bool isPassiveOutput(const MPlug &plug) const;
@@ -74,6 +81,15 @@ private:
 	Eigen::MatrixXd phiWeightsMatrix;
 
 	MStatus recalculateDistancesMatrix(MDataBlock &data);
+	double getPhi(double r);
+
+	static double phiLinear(double r);
+	static double phiMultiquadratic(double r, double blur);
+	static double phiGaussian(double r, double blur);
+	static double phiQubic(double r);
+	static double phiThinPlate(double r);
+
+	static bool compareMIntArrays(MIntArray &first, MIntArray &second);
 };
 
 #endif
