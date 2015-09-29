@@ -269,7 +269,6 @@ class TestRbfBlender(unittest.TestCase):
             print e
             
         cmds.setAttr(cube_test + ".translate", -1, 0, 0)
-        print "!!!!!!!!!!!!!!!!!!!!", cmds.getAttr(cube_test + ".scale")
         self.assert_( cmds.getAttr(cube_test + ".scale") == [(2, 1, 1)], "Bad result" + str(cmds.getAttr(cube_test + ".scale") ))
         
         cmds.setAttr(cube_test + ".translate", 0, 0, 1)
