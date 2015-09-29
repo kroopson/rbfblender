@@ -1,3 +1,9 @@
+//=======================================================================
+// Copyright 2015 Michal Krupa.
+// Distributed under the MIT License.
+// (See accompanying file LICENSE or copy at
+//  http://opensource.org/licenses/MIT)
+//=======================================================================
 
 #include <Eigen/Core>
 #include <Eigen/LU>

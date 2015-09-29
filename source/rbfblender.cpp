@@ -1,5 +1,11 @@
-#include "rbfblender.h"
+//=======================================================================
+// Copyright 2015 Michal Krupa.
+// Distributed under the MIT License.
+// (See accompanying file LICENSE or copy at
+//  http://opensource.org/licenses/MIT)
+//=======================================================================
 
+#include "rbfblender.h"
 
 MObject RbfBlender::input;
 MObject RbfBlender::output;
@@ -381,6 +387,8 @@ MStatus RbfBlender::initialize(){
 	attributeAffects(poseInputs, output);
 	attributeAffects(rbfKernel, output);
 	attributeAffects(rbfKernel, valueGuard);
+	attributeAffects(blurParameter, output);
+	attributeAffects(blurParameter, valueGuard);
 
 	return status;
 }
