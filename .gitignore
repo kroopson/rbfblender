@@ -1,0 +1,19 @@
+# Compiled modules #
+*.pyc
+
+# Eclipse project files #
+.project
+.settings
+*.*project
+
+# Compiled binaries
+*.exe
+*.dll
+*.mll
+build
+dist
+bin
+lib
+
+*~
+*.swp

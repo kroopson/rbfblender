@@ -139,11 +139,10 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 
 MStatus RbfBlender::compute(const MPlug& plug, MDataBlock& data){
 	MStatus stat;
+	// DEBUG
+	LOG_DEBUG_MESSAGE(MString("Computing output plug!") + plug.name());
 	if (plug.isElement()){
-		if (plug.array() == output){
-			// DEBUG
-			LOG_DEBUG_MESSAGE(MString("Computing output plug!") + plug.name());
-		
+		if (plug.array() == output){	
 			// Check if any poses available. If not just return 0.0
 			MPlug poses(thisMObject(), poses);
 			MDataHandle outputHandle = data.outputValue(plug);
@@ -235,6 +234,18 @@ MStatus RbfBlender::compute(const MPlug& plug, MDataBlock& data){
 }
 
 
+bool RbfBlender::isPassiveOutput(const MPlug &plug) const{
+	// DEBUG
+	LOG_DEBUG_MESSAGE(MString("Checking if output is passive for ") + plug.name());
+	if (plug.isElement()){
+		if (plug.array() == output){
+			return true;
+		}
+	}
+	return false;
+}
+
+
 MStatus RbfBlender::initialize(){
 	MFnNumericAttribute nAttr;
 	MFnCompoundAttribute cAttr;
@@ -273,7 +284,8 @@ MStatus RbfBlender::initialize(){
 	output = nAttr.create("output", "o", MFnNumericData::kDouble, 0.0, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 	nAttr.setArray(true);
-	nAttr.setWritable(true);
+	nAttr.setCached(false);
+	nAttr.setWritable(false);
 	nAttr.setStorable(true);
 
 	valueGuard = nAttr.create("valueGuard", "vg", MFnNumericData::kInt, 0, &status);
@@ -288,8 +300,12 @@ MStatus RbfBlender::initialize(){
 	addAttribute(valueGuard);
 
 	attributeAffects(input, output);
+
 	attributeAffects(poseValues, output);
+	attributeAffects(poseValues, valueGuard);
 	attributeAffects(poseInputs, valueGuard);
+	attributeAffects(poseInputs, output);
+
 	return status;
 }
 
