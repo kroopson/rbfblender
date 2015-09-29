@@ -288,8 +288,12 @@ MStatus RbfBlender::initialize(){
 	addAttribute(valueGuard);
 
 	attributeAffects(input, output);
+
 	attributeAffects(poseValues, output);
+	attributeAffects(poseValues, valueGuard);
 	attributeAffects(poseInputs, valueGuard);
+	attributeAffects(poseInputs, output);
+
 	return status;
 }
 
