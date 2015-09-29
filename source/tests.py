@@ -278,6 +278,33 @@ class TestRbfBlender(unittest.TestCase):
         cmds.setAttr(cube_test + ".translate", 1, 0, 0)
         self.assert_( cmds.getAttr(cube_test + ".scale") == [(1, 1, 2)], "Bad result" + str(cmds.getAttr(cube_test + ".scale")))
 
+    
+    def test_output_set(self):
+        print "###################################################"
+        print "TEST OUTPUT SET"
+        success = self.create_rbfblender()
+        self.assert_(success, "Failed to create the node.")
+        
+        try:
+            cmds.setAttr("blender.input[0]", .4)
+            cmds.setAttr("blender.poses[0].poseInputs[0]", 0.0)
+            cmds.setAttr("blender.poses[0].poseName", "test", type="string")
+            cmds.setAttr("blender.poses[0].poseValues[0]", 0.5)
+            cmds.setAttr("blender.poses[1].poseInputs[0]", 1.0)
+            cmds.setAttr("blender.poses[1].poseName", "test", type="string")
+            cmds.setAttr("blender.poses[1].poseValues[0]", 1.0)
+            success = True
+        except Exception, e:
+            success = False
+            print e
+        self.assert_(success, "Failed to set the poses attribute")
+        
+        cmds.getAttr("blender.output[0]")
+        
+        cmds.setAttr("blender.output[0]", 1.25)
+        print "!!!!!!!!!!!!!!!!!", cmds.getAttr("blender.output[0]")
+        # self.assert_(cmds.getAttr("blender.output[0]"))
+        
 
 if __name__ == '__main__':
     unittest.main()

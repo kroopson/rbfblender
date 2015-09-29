@@ -64,6 +64,8 @@ public:
 	static MObject poseValues;
 
 	static MObject valueGuard;
+
+	virtual bool isPassiveOutput(const MPlug &plug) const;
 private:
 	MIntArray lastCalculatedIndices;
 
