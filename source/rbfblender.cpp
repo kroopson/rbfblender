@@ -19,7 +19,10 @@ MObject RbfBlender::valueGuard;
 MObject RbfBlender::rbfKernel;
 MObject RbfBlender::blurParameter;
 
+MObject RbfBlender::currentPoseIndex;
+
 MTypeId RbfBlender::kNodeId(0x0011827B);
+
 
 RbfBlender::RbfBlender(){
 }
@@ -27,12 +30,13 @@ RbfBlender::RbfBlender(){
 RbfBlender::~RbfBlender(){
 }
 
+
 void* RbfBlender::creator(){
 	return new RbfBlender();
 }
 
 
-/* For further explaination of those functions visit https://en.wikipedia.org/wiki/Radial_basis_function */
+/* For further explaination of those functions visit https://en.wikipedia.org/wiki/Radial_basis_function --------------------*/
 double RbfBlender::phiLinear(double r){
 	return r;
 }
@@ -55,8 +59,10 @@ double RbfBlender::phiThinPlate(double r){
 	}
 	return pow(r, 2) * log(r);
 }
+/*---------------------------------------------------------------------------------------------------------------------------*/
 
-/* This function selects the Radial basis function kernel and returns the value of it */
+
+/* This function selects the Radial basis function kernel and returns the value of it ---------------------------------------*/
 double RbfBlender::getPhi(double r){
 	MPlug rbfkernelPlug(thisMObject(), rbfKernel);
 	int value = rbfkernelPlug.asInt();
@@ -85,7 +91,10 @@ double RbfBlender::getPhi(double r){
 	}
 	return result;
 }
+/*---------------------------------------------------------------------------------------------------------------------------*/
 
+
+/* Utility function testing if two MIntArrays are equal.---------------------------------------------------------------------*/
 bool RbfBlender::compareMIntArrays(MIntArray &first, MIntArray &second){
 	if (first.length() != second.length()){
 		return false;
@@ -98,6 +107,52 @@ bool RbfBlender::compareMIntArrays(MIntArray &first, MIntArray &second){
 	}
 	return true;
 }
+/*---------------------------------------------------------------------------------------------------------------------------*/
+
+
+MStatus RbfBlender::fillPoseInputsMatrix(Eigen::MatrixXd &poseInputsMatrix){
+	MPlug posesPlug(thisMObject(), poses);
+	unsigned int numPoses = posesPlug.numElements();  // number of poses currently available
+	if (numPoses == 0){  // quit if no poses created
+		LOG_DEBUG_MESSAGE(MString("No poses found yet. Quitting"));
+		return MStatus::kFailure;
+	}
+
+	// get the inputs plug and check if it's filled
+	MPlug inputPlug(thisMObject(), input);
+	MPlug outputPlug(thisMObject(), output);
+	MIntArray inputIndices;
+	MIntArray outputIndices;
+	
+	inputPlug.getExistingArrayAttributeIndices(inputIndices);
+	if (inputIndices.length() == 0){
+		LOG_DEBUG_MESSAGE(MString("No inputs found yet. Quitting"));
+		return MStatus::kFailure;
+	}
+
+	outputPlug.getExistingArrayAttributeIndices(outputIndices);
+	if (outputIndices.length() == 0){
+		LOG_DEBUG_MESSAGE(MString("No outputs found yet. Quitting"));
+		return MStatus::kFailure;
+	}
+
+	const unsigned int numInputs = inputIndices.length();  // count of input values
+
+	poseInputsMatrix.resize(numPoses, numInputs);
+	poseInputsMatrix.fill(0.0);
+
+	// Create a matrix of pose inputs where each row is a vector of input assigned to a different pose.
+	// I.e. 1, 0, 0 means first pose, 0, 1, 0 second and 0, 0, 1 is the third
+	for (unsigned int poseIndex = 0; poseIndex < numPoses; poseIndex++){
+		for (unsigned int i = 0; i < numInputs; i++){
+			unsigned int indice = inputIndices[i];
+			poseInputsMatrix(poseIndex, i) = posesPlug.elementByPhysicalIndex(poseIndex).child(1).elementByLogicalIndex(inputIndices[i]).asDouble();
+		}
+	}
+
+	return MStatus::kSuccess;
+}
+
 
 MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	MStatus stat;
@@ -140,6 +195,7 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	//Eigen::VectorXd currentInputVector(inputIndices.length());
 	Eigen::MatrixXd  poseInputsMatrix(numPoses, numInputs);
 
+	/*
 	// Create a matrix of pose inputs where each row is a vector of input assigned to a different pose.
 	// I.e. 1, 0, 0 means first pose, 0, 1, 0 second and 0, 0, 1 is the third
 	for (unsigned int poseIndex = 0; poseIndex < numPoses; poseIndex++){
@@ -147,6 +203,11 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 			unsigned int indice = inputIndices[i];
 			poseInputsMatrix(poseIndex, i) = posesPlug.elementByPhysicalIndex(poseIndex).child(1).elementByLogicalIndex(inputIndices[i]).asDouble();
 		}
+	}*/
+	
+	if (fillPoseInputsMatrix(poseInputsMatrix) == MStatus::kFailure){
+		LOG_DEBUG_MESSAGE(MString("Failed to fill pose inputs matrix."));
+		return MStatus::kFailure;
 	}
 
 	// Create a matrix of pose values where each row is a vector of values of the pose. That way in each column you'll have a values of one indice.
@@ -194,11 +255,12 @@ MStatus RbfBlender::recalculateDistancesMatrix(MDataBlock &data){
 	return MStatus::kSuccess;
 }
 
+
 MStatus RbfBlender::compute(const MPlug& plug, MDataBlock& data){
 	MStatus stat;
 	// DEBUG
 	LOG_DEBUG_MESSAGE(MString("Computing output plug!") + plug.name());
-	if (plug.isElement()){
+	if (plug.isElement()){ //=================================================================================================== OUTPUT
 		if (plug.array() == output){	
 			// Check if any poses available. If not just return 0.0
 			MPlug poses(thisMObject(), poses);
@@ -276,15 +338,48 @@ MStatus RbfBlender::compute(const MPlug& plug, MDataBlock& data){
 				double distance = getPhi((currentInputsVector - poseInputsVector).norm());
 				double weight = phiWeightsMatrix( poseIndex, outputPhysicalIndex);
 				result += distance * weight;
-				// DEBUG
-				// LOG_DEBUG_MESSAGE(MString("Distance from current is:") + distance);
-				// LOG_DEBUG_MESSAGE(MString("Weight for current is:") + weight);
 			}
 			// DEBUG
 			LOG_DEBUG_MESSAGE(MString("Result for this plug is:") + result);
 			outputHandle.setDouble(result);
 		}
 
+		data.setClean(plug);
+	} else if(plug == currentPoseIndex){  //==================================================================================== CURRENT POSE INDEX
+		MPlug inputPlug(thisMObject(), input);
+		MPlug posesPlug(thisMObject(), poses);
+		MIntArray inputIndices;
+		MIntArray posesIndices;
+		inputPlug.getExistingArrayAttributeIndices(inputIndices);
+		posesPlug.getExistingArrayAttributeIndices(posesIndices);
+
+		//Eigen::VectorXd currentInputVector(inputIndices.length());
+		Eigen::MatrixXd  poseInputsMatrix(1, 1);
+
+		if (fillPoseInputsMatrix(poseInputsMatrix) == MStatus::kFailure){
+			LOG_DEBUG_MESSAGE(MString("Failed to fill pose inputs matrix."));
+			return MStatus::kFailure;
+		}
+
+		Eigen::MatrixXd currentInputsVector(1, inputPlug.numElements());
+		for (unsigned int i=0; i < inputIndices.length(); i++){
+			currentInputsVector(0, i) = inputPlug.elementByLogicalIndex(inputIndices[i]).asDouble();
+		}
+
+		int result = -1;
+
+		for (unsigned i = 0; i < poseInputsMatrix.rows(); i++){
+			
+			if ((poseInputsMatrix.row(i) - currentInputsVector).norm() < 0.0001){
+				if (i >= posesIndices.length() || i < 0){result = -1;break;}  // Just to be sure you don't get out of array
+
+				result = posesIndices[i];
+				break;
+			}
+		}
+
+		MDataHandle outputHandle = data.outputValue(plug);
+		outputHandle.setInt(result);
 		data.setClean(plug);
 	}
 	return stat;
@@ -370,7 +465,14 @@ MStatus RbfBlender::initialize(){
 	nAttr.setChannelBox(true);
 	nAttr.setMin(0.0001);
 	nAttr.setDefault(1.0);
-	
+
+	currentPoseIndex = nAttr.create("currentPoseIndex", "cpi", MFnNumericData::kInt, -1, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	nAttr.setKeyable(false);
+	nAttr.setChannelBox(false);
+	nAttr.setWritable(false);
+	nAttr.setConnectable(false);
+	nAttr.setDefault(-1);
 
 	addAttribute(input);
 	addAttribute(poses);
@@ -378,20 +480,34 @@ MStatus RbfBlender::initialize(){
 	addAttribute(valueGuard);
 	addAttribute(rbfKernel);
 	addAttribute(blurParameter);
+	addAttribute(currentPoseIndex);
 
 	attributeAffects(input, output);
+	attributeAffects(input, currentPoseIndex);
+
+	attributeAffects(poses, output);
+	attributeAffects(poses, valueGuard);
+	attributeAffects(poses, currentPoseIndex);
 
 	attributeAffects(poseValues, output);
 	attributeAffects(poseValues, valueGuard);
+	attributeAffects(poseValues, currentPoseIndex);
+
 	attributeAffects(poseInputs, valueGuard);
 	attributeAffects(poseInputs, output);
-	attributeAffects(rbfKernel, output);
+	attributeAffects(poseInputs, currentPoseIndex);
+
 	attributeAffects(rbfKernel, valueGuard);
+	attributeAffects(rbfKernel, output);
+	attributeAffects(rbfKernel, currentPoseIndex);
+
 	attributeAffects(blurParameter, output);
 	attributeAffects(blurParameter, valueGuard);
-
+	attributeAffects(blurParameter, currentPoseIndex);
+	
 	return status;
 }
+
 
 void RbfBlender::postConstructor(){
 }

@@ -73,6 +73,11 @@ public:
 	static MObject rbfKernel;
 	static MObject blurParameter;  // Used for some kernels.
 
+	// This is an int attribute that will return an index of the pose that is currently reached
+	// or -1 if the input attribute is not close to any pose.
+	// It is about to be used to aid the pose values update scripts.
+	static MObject currentPoseIndex;
+
 	// This attribute value is never used, however when it has dirty bit set to 1
 	// the internal data - distancesMatrix, valuesMatrix and phiWeightsMatrix is recalculated.
 	// It's a performance optimisation.
@@ -96,6 +101,8 @@ private:
 	static double phiThinPlate(double r);
 
 	static bool compareMIntArrays(MIntArray &first, MIntArray &second);
+
+	MStatus fillPoseInputsMatrix(Eigen::MatrixXd &poseInputsMatrix);
 };
 
 #endif
