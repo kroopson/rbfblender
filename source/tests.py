@@ -49,7 +49,6 @@ class TestRbfBlender(unittest.TestCase):
         self.assert_(cmds.attributeQuery("output", n=rbf_node, ex=True), "Failed to get the output attribute")
         self.assert_(cmds.attributeQuery("poses", n=rbf_node, ex=True), "Failed to get the poses attribute")
         
-        
         try:
             cmds.setAttr("blender.poses[0].poseInputs[0]", 1.0)
             cmds.setAttr("blender.poses[0].poseName", "test", type="string")
@@ -87,6 +86,35 @@ class TestRbfBlender(unittest.TestCase):
         cmds.getAttr("blender.output[0]")
         cmds.setAttr("blender.input[0]", .5)
         cmds.getAttr("blender.output[0]")
+        
+    def test_passive_output(self):
+        print "###################################################"
+        print "TEST PASSIVE_OUTPUT ATTRIBUTE"
+        success = self.create_rbfblender()
+        self.assert_(success, "Failed to create the node.")
+        
+        try:
+            cmds.setAttr("blender.input[0]", .4)
+            cmds.setAttr("blender.poses[0].poseInputs[0]", 0.0)
+            cmds.setAttr("blender.poses[0].poseName", "test", type="string")
+            cmds.setAttr("blender.poses[0].poseValues[0]", 0.5)
+            cmds.setAttr("blender.poses[1].poseInputs[0]", 1.0)
+            cmds.setAttr("blender.poses[1].poseName", "test", type="string")
+            cmds.setAttr("blender.poses[1].poseValues[0]", 1.0)
+            success = True
+        except Exception, e:
+            success = False
+            print e
+        self.assert_(success, "Failed to set the poses attribute")
+        
+        target_locator = cmds.spaceLocator()[0]
+        cmds.connectAttr("blender.output[0]", target_locator + ".translateX")
+        
+        cmds.setAttr("blender.input[0]", 1.0)
+        self.assert_(abs(cmds.getAttr(target_locator + ".translateX") - 1.0) < .0004, "Bad value of connected attribute " + str(cmds.getAttr(target_locator + ".translateX")))
+        cmds.setAttr(target_locator + ".translateX", 2.0)
+        self.assert_(cmds.getAttr(target_locator + ".translateX") == 2.0, "Bad value of passive attribute " + str(cmds.getAttr(target_locator + ".translateX")))
+        
         
     def test_single_pose(self):
         print "###################################################"
@@ -401,6 +429,69 @@ class TestRbfBlender(unittest.TestCase):
         self.assertAlmostEquals( result[0], 2.0 , 4, "Bad result for thin plate" + str(cmds.getAttr(cube_test + ".scale") ))
         self.assertAlmostEquals( result[1], 1.0 ,4, "Bad result for thin plate" + str(cmds.getAttr(cube_test + ".scale") ))
         self.assertAlmostEquals( result[2], 1.0 ,4, "Bad result for thin plate" + str(cmds.getAttr(cube_test + ".scale") ))
+    
+    def test_current_pose_index(self):
+        print "###################################################"
+        print "TEST CURRENT_POSE_INDEX"
+        cube_test = cmds.polyCube()[0]
+
+        cube_a = cmds.polyCube()[0]
+        cube_b = cmds.polyCube()[0]
+        cube_c = cmds.polyCube()[0]
+
+        cmds.setAttr(cube_a + ".translate", -1, 0, 0)
+        cmds.setAttr(cube_b + ".translate", 0, 0, 1)
+        cmds.setAttr(cube_c + ".translate", 1, 0, 0)
+
+        cmds.setAttr(cube_a + ".scale", 2, 1, 1)
+        cmds.setAttr(cube_b + ".scale", 1, 2, 1)
+        cmds.setAttr(cube_c + ".scale", 1, 1, 2)
+        success = self.create_rbfblender()
+        self.assert_(success, "Failed to create the node.")
+        
+        try:
+            cmds.connectAttr(cube_test + ".translateX", "blender.input[0]")
+            cmds.connectAttr(cube_test + ".translateZ", "blender.input[1]")
+            
+            cmds.connectAttr("blender.output[0]", cube_test + ".scaleX")
+            cmds.connectAttr("blender.output[1]", cube_test + ".scaleY")
+            cmds.connectAttr("blender.output[2]", cube_test + ".scaleZ")
+            
+            print "!! Creating pose 0"
+            cmds.connectAttr(cube_a + ".translateX", "blender.poses[0].poseInputs[0]")
+            cmds.connectAttr(cube_a + ".translateZ", "blender.poses[0].poseInputs[1]")
+            cmds.connectAttr(cube_a + ".scaleX", "blender.poses[0].poseValues[0]")
+            cmds.connectAttr(cube_a + ".scaleY", "blender.poses[0].poseValues[1]")
+            cmds.connectAttr(cube_a + ".scaleZ", "blender.poses[0].poseValues[2]")
+            
+            print "!! Creating pose 1"
+            cmds.connectAttr(cube_b + ".translateX", "blender.poses[1].poseInputs[0]")
+            cmds.connectAttr(cube_b + ".translateZ", "blender.poses[1].poseInputs[1]")
+            cmds.connectAttr(cube_b + ".scaleX", "blender.poses[1].poseValues[0]")
+            cmds.connectAttr(cube_b + ".scaleY", "blender.poses[1].poseValues[1]")
+            cmds.connectAttr(cube_b + ".scaleZ", "blender.poses[1].poseValues[2]")
+            
+            print "!! Creating pose 2"
+            cmds.connectAttr(cube_c + ".translateX", "blender.poses[2].poseInputs[0]")
+            cmds.connectAttr(cube_c + ".translateZ", "blender.poses[2].poseInputs[1]")
+            cmds.connectAttr(cube_c + ".scaleX", "blender.poses[2].poseValues[0]")
+            cmds.connectAttr(cube_c + ".scaleY", "blender.poses[2].poseValues[1]")
+            cmds.connectAttr(cube_c + ".scaleZ", "blender.poses[2].poseValues[2]")
+            
+            success = True
+        except Exception, e:
+            success = False
+            print e
+            
+        cmds.setAttr(cube_test + ".translate", -1, 0, 0)
+        self.assert_( cmds.getAttr("blender.currentPoseIndex") == 0, "Bad result - expected 0 got " + str(cmds.getAttr("blender.currentPoseIndex") ))
+        
+        cmds.setAttr(cube_test + ".translate", 0, 0, 1)
+        self.assert_( cmds.getAttr("blender.currentPoseIndex") == 1, "Bad result - expected 1 got " + str(cmds.getAttr("blender.currentPoseIndex") ))
+        
+        cmds.setAttr(cube_test + ".translate", 1, 0, 0)
+        self.assert_( cmds.getAttr("blender.currentPoseIndex") == 2, "Bad result - expected 1 got " + str(cmds.getAttr("blender.currentPoseIndex") ))
+        
 
 if __name__ == '__main__':
     unittest.main()
