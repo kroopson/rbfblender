@@ -8,6 +8,9 @@ maya.standalone.initialize()
 
 import maya.cmds as cmds
 import os
+import sys
+
+sys.path.append(os.path.dirname(__file__))
 
 cmds.loadPlugin("rbfblender")
 
